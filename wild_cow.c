@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <string.h>
 
-void update() 
+void update(void)
 {
     printf("\033[H\033[J");
 }
@@ -12,7 +12,7 @@ void gotoxy(int x, int y)
     printf("\033[%d;%dH", y, x);
 }
 
-void affiche_vache() 
+void affiche_vache(void)
 {
     printf("                          ^__^\n\
                           (00)\\_______\n\
@@ -21,7 +21,7 @@ void affiche_vache()
                               ||     ||\n");
 }
 
-void bouge_langue() 
+void bouge_langue(void)
 {
     unsigned long t=50000;
 
@@ -147,7 +147,6 @@ void bouge_langue()
     sleep(1);
     update();
 
-    char espace = ' ';
     char ligne[150] = "                                                               ";
 
     for (int i = 40; i > 2; i--) {
@@ -176,8 +175,17 @@ void bouge_langue()
     }
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+    if (argc == 2 && strcmp(argv[1], "--help") == 0) {
+        printf("Usage: %s\nAnimation de la vache sauvage dans le terminal.\n"
+               "Exemple: %s\n", argv[0], argv[0]);
+        return 0;
+    }
+    if (argc != 1) {
+        fprintf(stderr, "Usage: %s (voir --help)\n", argv[0]);
+        return 1;
+    }
     bouge_langue();
     return 0;
 }

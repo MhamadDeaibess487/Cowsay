@@ -4,6 +4,7 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
+#include <errno.h>
 
 #define BYEBYELIFE 0
 #define LIFESUCKS 1
@@ -19,9 +20,28 @@ struct Joueur {
     int score; // Le score du joueur
 };
 
+/* Read a complete answer, rejecting truncated input and EOF explicitly. */
+static void lireLigne(char *buffer, size_t size)
+{
+    if (fgets(buffer, (int)size, stdin) == NULL) {
+        fprintf(stderr, "Fin de saisie ou erreur de lecture.\n");
+        exit(EXIT_FAILURE);
+    }
+    size_t length = strcspn(buffer, "\n");
+    if (buffer[length] == '\n') {
+        buffer[length] = '\0';
+    } else {
+        int c = getchar();
+        if (c != '\n' && c != EOF) {
+            fprintf(stderr, "Saisie trop longue.\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
 void afficherLettreParLettre(const char* phrase, int delai) {
-    int longueur = strlen(phrase); // Obtient la longueur de la phrase
-    for (int i = 0; i < longueur; i++) {
+    size_t longueur = strlen(phrase); // Obtient la longueur de la phrase
+    for (size_t i = 0; i < longueur; i++) {
         printf("%c", phrase[i]); // Affiche le caractère actuel de la phrase
         fflush(stdout); // Vide le tampon de sortie pour afficher immédiatement le caractère
         usleep(delai * 1000); // Pause de temps en millisecondes entre l'affichage de chaque caractère
@@ -33,16 +53,22 @@ void saisirNomsJoueurs(struct Joueur* joueurs, int* nbJoueurs) {
     char nom[TAILLE_NOM]; // Variable locale pour stocker le nom temporaire du joueur
     *nbJoueurs = 0; // Initialise le nombre de joueurs à 0
     printf("Saisissez le nom du joueur %d (ou 'stop' pour arrêter) : ", *nbJoueurs + 1);
-    fgets(nom, sizeof(nom), stdin); // Lit la saisie du joueur
+    lireLigne(nom, sizeof(nom)); // Lit la saisie du joueur
     nom[strcspn(nom, "\n")] = '\0'; // Supprime le caractère de nouvelle ligne de la saisie
 
     while (strcmp(nom, "stop") != 0 && *nbJoueurs < MAX_JOUEURS) {
-        strncpy(joueurs[*nbJoueurs].nom, nom, sizeof(joueurs[*nbJoueurs].nom) - 1); // Copie le nom saisi dans la structure du joueur actuel
+        if (nom[0] == '\0') {
+            fprintf(stderr, "Le nom ne peut pas être vide.\n");
+            exit(EXIT_FAILURE);
+        }
+        memcpy(joueurs[*nbJoueurs].nom, nom, strlen(nom) + 1); // Copie le nom saisi dans la structure du joueur actuel
         joueurs[*nbJoueurs].nom[sizeof(joueurs[*nbJoueurs].nom) - 1] = '\0'; // Ensure null termination
         joueurs[*nbJoueurs].score = 0; // Initialise le score du joueur actuel à 0
         (*nbJoueurs)++; // Incrémente le nombre de joueurs
+        if (*nbJoueurs == MAX_JOUEURS)
+            break;
         printf("Saisissez le nom du joueur %d (ou 'stop' pour arrêter) : ", *nbJoueurs + 1);
-        fgets(nom, sizeof(nom), stdin); // Lit la saisie du joueur
+        lireLigne(nom, sizeof(nom)); // Lit la saisie du joueur
         nom[strcspn(nom, "\n")] = '\0'; // Supprime le caractère de nouvelle ligne de la saisie
     }
     printf("\n");
@@ -51,16 +77,16 @@ void saisirNomsJoueurs(struct Joueur* joueurs, int* nbJoueurs) {
 void regles(char* reponse) {
     char phrase[TAILLE_MAX_PHRASE];
     int delai = 50; // Délai entre chaque lettre en millisecondes
-    for (int i = 0; i < strlen(reponse); i++) {
-        reponse[i] = tolower(reponse[i]); // Convertit la réponse en minuscules
+    for (size_t i = 0; i < strlen(reponse); i++) {
+        reponse[i] = (char)tolower((unsigned char)reponse[i]); // Convertit la réponse en minuscules
     }
 
     while (strcmp(reponse, "oui") != 0 && strcmp(reponse, "non") != 0 &&
            strcmp(reponse, "o") != 0 && strcmp(reponse, "n") != 0) {
         printf("Réponse invalide. Veuillez réessayer : ");
-        scanf("%s", reponse);
-        for (int i = 0; i < strlen(reponse); i++) {
-            reponse[i] = tolower(reponse[i]); // Convertit la réponse en minuscules
+        lireLigne(reponse, 10);
+        for (size_t i = 0; i < strlen(reponse); i++) {
+            reponse[i] = (char)tolower((unsigned char)reponse[i]); // Convertit la réponse en minuscules
         }
     }
 
@@ -83,14 +109,12 @@ void regles(char* reponse) {
         printf("    -> si votre vache atteint 0 de niveau de santé, elle meurt de faim, à 10 de suralimentation\n\n\n");
     }
 
-    int c;
-    while ((c = getchar()) != '\n' && c != EOF) {} // Vide le tampon d'entrée
-
     printf("\n");
     strncpy(phrase, "Appuyez sur Entrée pour continuer...", sizeof(phrase)-1);
     phrase[sizeof(phrase)-1] = '\0'; // Ensure null termination
     afficherLettreParLettre(phrase, delai);
-    getchar(); // Attend la pression de la touche Entrée
+    char entree[2];
+    lireLigne(entree, sizeof(entree));
     strncpy(phrase, "Début de la partie!", sizeof(phrase)-1);
     phrase[sizeof(phrase)-1] = '\0'; // Ensure null termination
     afficherLettreParLettre(phrase, delai); // Affiche la phrase lettre par lettre avec un délai
@@ -134,7 +158,6 @@ void affiche_vache(int* etat)
 
 int quantiteNourrir(int* stock)
 {
-    char phrase[TAILLE_MAX_PHRASE];
     int delai = 50; // Délai entre chaque lettre en millisecondes
 
     int donner = 0;
@@ -149,7 +172,19 @@ int quantiteNourrir(int* stock)
         afficherLettreParLettre(phrase, delai);
         sleep(1);
         printf("Entrez un nombre entre 0 et %d -> ", *stock);
-        scanf("%d", &donner);
+        for (;;) {
+            char answer[64], *end;
+            lireLigne(answer, sizeof(answer));
+            errno = 0;
+            long value = strtol(answer, &end, 10);
+            int converted = end != answer;
+            while (isspace((unsigned char)*end)) ++end;
+            if (!errno && converted && !*end && value >= 0 && value <= *stock) {
+                donner = (int)value;
+                break;
+            }
+            fprintf(stderr, "Entrez un entier entre 0 et %d : ", *stock);
+        }
         printf("\n");
     }
 
@@ -232,7 +267,7 @@ void evolutionStock(int* stock)
 }
 
 
-int digestion()
+int digestion(void)
 {
     srand(time(NULL)); // Initialise le générateur de nombres aléatoires avec une graine basée sur l'heure actuelle
 
@@ -322,8 +357,19 @@ int automate(int* stock, int* fitness, int* etat, int* nourrir, int* val_digesti
 }
 
 
-int main()
+int main(int argc, char *argv[])
 {
+    if (argc == 2 && strcmp(argv[1], "--help") == 0) {
+        printf("Usage: %s\nJeu interactif pour 1 à 10 joueurs.\n"
+               "Saisissez les noms (49 octets maximum), puis stop.\n"
+               "Nourrissez la vache avec un entier entre 0 et le stock disponible.\n"
+               "Exemple: %s\n", argv[0], argv[0]);
+        return 0;
+    }
+    if (argc != 1) {
+        fprintf(stderr, "Usage: %s (voir --help)\n", argv[0]);
+        return 1;
+    }
     char phrase[TAILLE_MAX_PHRASE] = " ";
     int delai = 50; 
 
@@ -332,6 +378,7 @@ int main()
 
     system("clear");  // Efface l'écran
     saisirNomsJoueurs(joueurs, &nbJoueurs);  
+    if (nbJoueurs == 0) return 0;
     strcpy(phrase, "Liste des joueurs :");
     afficherLettreParLettre(phrase, delai);
 
@@ -360,7 +407,7 @@ int main()
         sleep(1);  
         strcpy(phrase, "Afficher les règles du jeu?\n[Oui(o)/Non(n)] :");
         afficherLettreParLettre(phrase, delai);
-        scanf("%s", reponse);
+        lireLigne(reponse, 10);
         regles(reponse);  
         system("clear");  
         printf("Voici votre stock de départ -> %d unités\n", stock);
